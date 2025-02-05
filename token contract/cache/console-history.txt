@@ -1,0 +1,5 @@
+.exit
+ethers.provider.getBalance(deployer.address).then(balance => console.log(ethers.utils.formatEther(balance)));
+const [deployer] = await ethers.getSigners();
+.exit
+.help
