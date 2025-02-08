@@ -14,28 +14,40 @@ type AppCircuit struct {
 	EmissionsData *big.Int
 }
 
-// Allocate defines data slots for receipts, storage, and transactions
-func (c *AppCircuit) Allocate() (maxReceipts, maxStorage, maxTransaction int) {
-	return 1, 1, 1 
+var _ sdk.AppCircuit = &AppCircuit{}
+
+func (c *AppCircuit) Allocate() (maxReceipts, maxStorage, maxTransactions int) {
+	return 0, 32, 0 
 }
 
+func (c *AppCircuit) Define(api *sdk.CircuitAPI, in sdk.DataInput) error {
+	slots := sdk.NewDataStream(api, in.StorageSlots)
+	expectedEmission := sdk.ConstUint248(c.EmissionsData.Uint64()) 
 
-func (c *AppCircuit) Define(api *sdk.CircuitAPI, input sdk.DataInput) error {
-	emissionData := api.ToUint248(input.Get("emissions"))
-	// Ensure that the emission data matches the expected circuit value
-	api.AssertIsEqual(emissionData, c.EmissionsData)
+	sdk.AssertEach(slots, func(slot sdk.StorageSlot) sdk.Uint248 {
+		emissionValue := api.ToUint248(slot.Value)
+		return api.Uint248.IsEqual(emissionValue, expectedEmission)
+	})
+
+	emissions := sdk.Map(slots, func(slot sdk.StorageSlot) sdk.Uint248 {
+		return api.ToUint248(slot.Value)
+	})
+	totalEmissions := sdk.Sum(emissions)
+
+	api.OutputUint(248, totalEmissions)
+
 	return nil
 }
 
 func main() {
-	rpcURL := "https://sepolia.publicnode.com"
+	rpcURL := "https://sepolia.drpc.org"
 	outputDir := "./brevis-output"
 	app, err := sdk.NewBrevisApp(11155111, rpcURL, outputDir)
 	if err != nil {
 		log.Fatalf("Error initializing BrevisApp: %v", err)
 	}
 
-	estimatedEmissions := big.NewInt(10000) //example
+	estimatedEmissions := big.NewInt(10000) // Example emissions
 	circuit := &AppCircuit{EmissionsData: estimatedEmissions}
 
 	circuitInput, err := app.BuildCircuitInput(circuit)
@@ -61,7 +73,7 @@ func main() {
 	}
 
 	tokenAddress := common.HexToAddress("0xbd2F3813637Ed399D5ddBC2307D3bf4Ab1695B48")
-	refundAddress := common.HexToAddress("0x788997cD5b9feAc56d4928539Dc21C637C61E69a") 
+	refundAddress := common.HexToAddress("0x788997cD5b9feAc56d4928539Dc21C637C61E69a")
 
 	_, requestId, feeValue, _, err := app.PrepareRequest(
 		vk, witness, 11155111, 11155111, refundAddress, tokenAddress, 500000, nil, "",
