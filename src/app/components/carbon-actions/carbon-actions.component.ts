@@ -1,5 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { ethers } from 'ethers';
+
+declare global {
+  interface Window {
+    ethereum: any;
+  }
+}
 
 interface CarbonAction {
   type: string;
@@ -14,67 +21,117 @@ interface CarbonAction {
   netEmissions: number;
   creditTypes: string[];
   protocols: string[];
+  input: string;
+  methodId: string;
 }
+
+const carbonSustainAbi = [
+  "function createCarbonCredit(uint256 _companyId, uint256 _amount) external"
+];
+
+const carbonSustainAddress = '0x289b1796AdAD1d9e1e02488C38967B1a73541021'; // Replace with actual contract address
 
 @Component({
   selector: 'app-carbon-actions',
   template: `
-    <div class="actions-container">
-      <div class="wallet-input">
-        <mat-form-field appearance="fill">
-          <mat-label>Wallet Address</mat-label>
-          <input matInput [(ngModel)]="walletAddress" placeholder="Enter wallet address">
-        </mat-form-field>
-        <button mat-raised-button color="primary" (click)="submitWalletAddress()">
-          Submit
-        </button>
-      </div>
+    <div class="layout-container">
+      <div class="actions-container">
+        <div class="wallet-input">
+          <mat-form-field appearance="fill">
+            <mat-label>Wallet Address</mat-label>
+            <input matInput [(ngModel)]="walletAddress" placeholder="Enter wallet address">
+          </mat-form-field>
+          <button mat-raised-button color="primary" (click)="submitWalletAddress()">
+            Submit
+          </button>
+        </div>
 
-      <table mat-table [dataSource]="carbonActions" class="actions-table">
-        <ng-container matColumnDef="status">
-          <th mat-header-cell *matHeaderCellDef>Status</th>
-          <td mat-cell *matCellDef="let action">
-            <span [ngClass]="{'status-success': action.status === 'Success', 'status-failed': action.status === 'Failed'}">
-              {{ action.status }}
-            </span>
-          </td>
-        </ng-container>
-        <ng-container matColumnDef="impact">
-          <th mat-header-cell *matHeaderCellDef>Carbon Impact</th>
-          <td mat-cell *matCellDef="let action">{{ action.impact }} tons</td>
-        </ng-container>
-        <ng-container matColumnDef="co2Estimate">
-          <th mat-header-cell *matHeaderCellDef>CO2 Estimate</th>
-          <td mat-cell *matCellDef="let action">{{ action.co2Estimate }} tons</td>
-        </ng-container>
-        <ng-container matColumnDef="aiCarbonFootprint">
-          <th mat-header-cell *matHeaderCellDef>AI Carbon Footprint</th>
-          <td mat-cell *matCellDef="let action">{{ action.aiCarbonFootprint }} tons</td>
-        </ng-container>
-        <tr mat-header-row *matHeaderRowDef="['status', 'impact', 'co2Estimate', 'aiCarbonFootprint']"></tr>
-        <tr mat-row *matRowDef="let row; columns: ['status', 'impact', 'co2Estimate', 'aiCarbonFootprint'];"></tr>
-      </table>
+        <div class="token-purchase">
+          <mat-form-field appearance="fill">
+            <mat-label>Number of Tokens</mat-label>
+            <input matInput type="number" [(ngModel)]="tokenAmount" placeholder="Enter number of tokens">
+          </mat-form-field>
+          <button mat-raised-button color="primary" (click)="purchaseCredits()">
+            <mat-icon>add_circle</mat-icon>
+            Purchase Carbon Credits
+          </button>
+        </div>
 
-      <div class="actions-buttons">
-        <button mat-raised-button color="primary" (click)="purchaseCredits()">
-          <mat-icon>add_circle</mat-icon>
-          Purchase Carbon Credits
-        </button>
-      </div>
+        <div class="stats-container">
+          <div class="stat-box">
+            <h3>Total AI Carbon Footprint</h3>
+            <p>{{ getTotalAICarbonFootprint() }} tons</p>
+          </div>
+          <div class="stat-box">
+            <h3>Total Transactions</h3>
+            <p>{{ getTotalTransactions() }}</p>
+          </div>
+        </div>
 
-      <div class="ai-carbon-footprint-total">
-        <h3>Total AI Carbon Footprint: {{ getTotalAICarbonFootprint() }} tons</h3>
+        <table mat-table [dataSource]="carbonActions" class="actions-table">
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let action">
+              <span [ngClass]="{'status-success': action.status === 'Success', 'status-failed': action.status === 'Failed'}">
+                {{ action.status }}
+              </span>
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="input">
+            <th mat-header-cell *matHeaderCellDef>Input</th>
+            <td mat-cell *matCellDef="let action">{{ action.input }}</td>
+          </ng-container>
+          <ng-container matColumnDef="methodId">
+            <th mat-header-cell *matHeaderCellDef>Method ID</th>
+            <td mat-cell *matCellDef="let action">{{ action.methodId }}</td>
+          </ng-container>
+          <ng-container matColumnDef="aiCarbonFootprint">
+            <th mat-header-cell *matHeaderCellDef>AI Carbon Footprint</th>
+            <td mat-cell *matCellDef="let action">{{ action.aiCarbonFootprint }} tons</td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+
+        <div class="actions-buttons">
+          <button mat-raised-button color="primary" (click)="purchaseCredits()">
+            <mat-icon>add_circle</mat-icon>
+            Purchase Carbon Credits
+          </button>
+        </div>
       </div>
     </div>
   `,
   styles: [`
+    .layout-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+    }
+
     .actions-container {
+      flex: 1;
+      overflow: auto;
       padding: 20px;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .actions-table {
       width: 100%;
+      margin-top: 20px;
+    }
+
+    .wallet-input {
+      display: flex;
+      gap: 10px;
       margin-bottom: 20px;
+      width: 100%;
+    }
+
+    mat-form-field {
+      flex: 1;
     }
 
     .status-success {
@@ -95,10 +152,6 @@ interface CarbonAction {
       margin-right: 8px;
     }
 
-    .wallet-input {
-      margin-bottom: 20px;
-    }
-
     .red-emoji {
       color: red;
     }
@@ -112,26 +165,70 @@ interface CarbonAction {
     }
 
     .ai-carbon-footprint-total {
-      margin-top: 20px;
+      margin-bottom: 20px;
+      text-align: left;
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+    }
+
+    .ai-carbon-footprint-total h3 {
+      margin: 0;
+      color: #333;
+    }
+
+    .stats-container {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
       text-align: center;
+    }
+
+    .stat-box h3 {
+      margin: 0 0 10px 0;
+      color: #333;
+      font-size: 1rem;
+    }
+
+    .stat-box p {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #1976d2;
+    }
+
+    .token-purchase {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
     }
   `]
 })
 export class CarbonActionsComponent implements OnInit {
   carbonActions: CarbonAction[] = [
     {
-      type: 'Carbon Credit Purchase',
-      impact: 10,
-      date: '2025-02-06',
-      status: 'Verified',
-      wallet: '',
-      co2Estimate: 0,
-      aiCarbonFootprint: 0,
-      totalCO2e: 0,
-      totalCredits: 0,
-      netEmissions: 0,
-      creditTypes: [],
-      protocols: []
+      type: 'Transaction',
+      impact: 0.5,
+      date: '2024-02-08',
+      status: 'Success',
+      wallet: '0x123...',
+      co2Estimate: 0.3,
+      aiCarbonFootprint: 0.2,
+      totalCO2e: 0.8,
+      totalCredits: 1.0,
+      netEmissions: -0.2,
+      creditTypes: ['VCS'],
+      protocols: ['ETH'],
+      input: '0x',
+      methodId: '0x23b872dd'
     },
     {
       type: 'L2 Transaction Bundle',
@@ -145,20 +242,45 @@ export class CarbonActionsComponent implements OnInit {
       totalCredits: 0,
       netEmissions: 0,
       creditTypes: [],
-      protocols: []
+      protocols: [],
+      input: '',
+      methodId: ''
     }
   ];
 
-  displayedColumns: string[] = ['status', 'impact', 'co2Estimate', 'aiCarbonFootprint'];
+  displayedColumns: string[] = ['status', 'input', 'methodId', 'aiCarbonFootprint'];
 
   walletAddress: string = '';
+
+  tokenAmount: number = 0;
 
   constructor(private http: HttpClient) {}
 
   ngOnInit(): void {}
 
-  purchaseCredits(): void {
-    console.log('Initiating carbon credit purchase...');
+  async purchaseCredits() {
+    try {
+      if (!window.ethereum) {
+        console.error('MetaMask is not installed!');
+        return;
+      }
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send('eth_requestAccounts', []);
+      const signer = provider.getSigner();
+
+      const carbonSustainContract = new ethers.Contract(carbonSustainAddress, carbonSustainAbi, signer);
+      const companyId = 1; // Example company ID
+      const amount = ethers.utils.parseUnits(this.tokenAmount.toString(), 18); // Use input amount
+
+      const tx = await carbonSustainContract['createCarbonCredit'](companyId, amount);
+      console.log('Transaction sent:', tx.hash);
+
+      await tx.wait();
+      console.log('Transaction confirmed:', tx.hash);
+    } catch (error) {
+      console.error('Error purchasing credits:', error);
+    }
   }
 
   fetchAICarbonFootprint(txHash: string): number {
@@ -182,7 +304,9 @@ export class CarbonActionsComponent implements OnInit {
           totalCredits: 0,
           netEmissions: 0,
           creditTypes: [],
-          protocols: []
+          protocols: [],
+          input: '',
+          methodId: ''
         }));
       } else {
         console.error('Failed to fetch transactions');
@@ -199,6 +323,10 @@ export class CarbonActionsComponent implements OnInit {
 
   getTotalAICarbonFootprint(): number {
     return this.carbonActions.reduce((sum, action) => sum + action.aiCarbonFootprint, 0);
+  }
+
+  getTotalTransactions(): number {
+    return this.carbonActions.length;
   }
 
   purchaseCarbonCredit(action: CarbonAction): void {
