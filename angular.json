@@ -90,7 +90,15 @@
               "@angular/material/prebuilt-themes/deeppurple-amber.css",
               "src/styles.scss"
             ],
-            "scripts": []
+            "scripts": {
+              "ng": "ng",
+              "start": "node server.js",
+              "heroku-postbuild": "ng build --configuration=production",
+              "build": "ng build",
+              "test": "ng test",
+              "lint": "ng lint",
+              "e2e": "ng e2e"
+            }
           }
         }
       }
