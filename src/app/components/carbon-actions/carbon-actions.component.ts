@@ -46,6 +46,18 @@ const carbonSustainAddress = '0x289b1796AdAD1d9e1e02488C38967B1a73541021'; // Re
           </button>
         </div>
 
+               <!-- Prepare and Submit Buttons -->
+        <div class="api-buttons">
+          <button mat-raised-button color="accent" (click)="prepareDownload()">
+            <mat-icon>cloud_download</mat-icon>
+            Prepare Download
+          </button>
+          <button mat-raised-button color="warn" (click)="submitProof()">
+            <mat-icon>check_circle</mat-icon>
+            Submit Proof
+          </button>
+        </div>
+
         <div class="token-purchase">
           <mat-form-field appearance="fill">
             <mat-label>Number of Tokens</mat-label>
@@ -352,5 +364,22 @@ export class CarbonActionsComponent implements OnInit {
     if (action) {
       action.co2Estimate = estimate;
     }
+  }
+  prepareDownload(): void {
+    this.http.get('https://stormy-escarpment-83562-6d0f2f80e5fd.herokuapp.com/prepare-download')
+      .subscribe(response => {
+        console.log('Prepare download response:', response);
+      }, error => {
+        console.error('Error preparing download:', error);
+      });
+  }
+
+  submitProof(): void {
+    this.http.get('https://stormy-escarpment-83562-6d0f2f80e5fd.herokuapp.com/submit-proof')
+      .subscribe(response => {
+        console.log('Submit proof response:', response);
+      }, error => {
+        console.error('Error submitting proof:', error);
+      });
   }
 }
